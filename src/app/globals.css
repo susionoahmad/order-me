@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc; /* Abu-abu sangat muda agar kontras dengan kartu putih */
+  --foreground: #0f172a;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', sans-serif; /* Menggunakan font yang lebih modern */
+  overflow-x: hidden;
+}
+
+/* Menghilangkan scrollbar tapi tetap bisa scroll */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Animasi Muncul Modal dari Bawah */
+@keyframes slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-slide-up { 
+  animation: slide-up 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
+}
+
+/* Animasi Tombol Melayang yang Halus */
+@keyframes bounce-subtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.animate-bounce-subtle { 
+  animation: bounce-subtle 2s ease-in-out infinite; 
+}

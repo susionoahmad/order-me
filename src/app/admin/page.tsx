@@ -92,11 +92,14 @@ const fetchProfile = async () => {
 
   // --- CLEANUP ---
   return () => {
-    channelPromise.then(channel => {
-      if (channel) supabase.removeChannel(channel);
-    });
-  };
-}, [router]); // Tambahkan router di dependency agar sinkron
+        channelPromise.then((channel) => {
+          if (channel) {
+            // @ts-ignore
+            supabase.removeChannel(channel);
+          }
+        });
+      };
+    }, [router]);// Tambahkan router di dependency agar sinkron
 
   const updateStatus = async (id: string, statusBaru: string) => {
   console.log("Mencoba update ID:", id, "ke status:", statusBaru); // Cek di console browser (F12)

@@ -320,94 +320,81 @@ const linkToko = `${host}/s/${profile?.slug}`;
             <span style={{ fontSize: '14px' }}>BAGIKAN KE WHATSAPP</span>
           </button>
         </div>       
-        {/* ORDER LIST */}
-        <div className="bg-white rounded-[2rem] shadow-sm overflow-hidden border border-gray-100">
-          <table className="w-full text-left border-collapse">
-            <thead className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-              <tr>
-                <th className="p-6">Nama Pelanggan</th>
-                <th className="p-6">Total</th>
-                <th className="p-6 text-center">Status</th>
-                <th className="p-6 text-right">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-            {orders.map((order) => (
-                <tr key={order.id} className="hover:bg-gray-50/50 transition-all">
-                <td className="p-6">
-                    {/* Nama Pelanggan Utama */}
-                    <div className="font-bold text-gray-800 text-lg mb-1 lowercase first-letter:uppercase">
-                    {order.nama_pelanggan}
-                    </div>
-                    
-                    {/* Rincian Menu yang aman untuk HP */}
-                    <div className="flex flex-wrap gap-1 mt-2 max-w-[200px] md:max-w-none">
-                    {order.order_items?.map((item: any, idx: number) => (
-                        <span 
-                        key={idx} 
-                        className="inline-flex items-center bg-blue-50 text-blue-700 text-[9px] px-2 py-1 rounded-md border border-blue-100 font-bold whitespace-nowrap"
-                        >
-                        {item.products.nama_produk} x{item.jumlah}
-                        </span>
-                    ))}
-                    </div>
-                    {order.alamat_maps_url && (
-                    <a 
-                        href={order.alamat_maps_url} 
-                        target="_blank" 
-                        className="inline-block mt-3 text-[10px] text-blue-500 font-bold hover:underline"
-                    >
-                        📍 Lihat Lokasi Pengiriman
-                    </a>
-                    )}
-                </td>
-
-                <td className="p-6 font-black text-orange-600 text-base">
-                    Rp {order.total_bayar.toLocaleString()}
-                </td>
-
-                <td className="p-6 text-center">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                    order.status_pesanan === 'antri' ? 'bg-orange-100 text-orange-600' : 
-                    order.status_pesanan === 'dimasak' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'
-                    }`}>
-                    {order.status_pesanan}
-                    </span>
-                </td>
-
-                <td className="p-6 text-right space-x-2">
-                    {/* Tombol-tombol Aksi tetap sama seperti kode Anda sebelumnya */}
-                    {order.status_pesanan === 'antri' && (
-                        <button 
-                        onClick={() => updateStatus(order.id, 'dimasak')} 
-                        className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] px-4 py-2 rounded-xl font-black shadow-lg shadow-blue-100 transition-all active:scale-90"
-                        >
-                        👨‍🍳 TERIMA & MASAK
-                        </button>
-                    )}
-
-                    {order.status_pesanan === 'dimasak' && (
-                        <button 
-                        onClick={() => updateStatus(order.id, 'selesai')} 
-                        className="bg-green-600 hover:bg-green-700 text-white text-[10px] px-4 py-2 rounded-xl font-black shadow-lg shadow-green-100 transition-all active:scale-90"
-                        >
-                        ✅ SELESAI
-                        </button>
-                    )}
-
-                    {order.status_pesanan === 'selesai' && (
-                        <button 
-                        onClick={() => handlePrint(order)} 
-                        className="bg-gray-800 hover:bg-black text-white text-[10px] px-4 py-2 rounded-xl font-black shadow-lg shadow-gray-200 transition-all active:scale-90"
-                        >
-                        🖨️ CETAK STRUK
-                        </button>
-                    )}
-                </td>
+        {/* ORDER LIST: VERSI STABIL & AMAN (TIDAK AKAN HANCUR) */}
+        <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
+          {/* Pembungkus ini yang bikin tabel bisa digeser di HP tapi tetap rapi di Laptop */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[700px]">
+              <thead className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                <tr>
+                  <th className="p-6">Nama Pelanggan</th>
+                  <th className="p-6">Rincian Menu</th>
+                  <th className="p-6">Total Bayar</th>
+                  <th className="p-6 text-center">Status</th>
+                  <th className="p-6 text-right">Aksi</th>
                 </tr>
-            ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {orders.map((order) => (
+                  <tr key={order.id} className="hover:bg-gray-50/50 transition-all">
+                    {/* 1. NAMA */}
+                    <td className="p-6">
+                      <div className="font-bold text-gray-800 text-lg lowercase first-letter:uppercase">
+                        {order.nama_pelanggan}
+                      </div>
+                    </td>
+
+                    {/* 2. MENU */}
+                    <td className="p-6">
+                      <div className="flex flex-wrap gap-1">
+                        {order.order_items?.map((item: any, idx: number) => (
+                          <span key={idx} className="bg-blue-50 text-blue-700 text-[10px] px-2 py-1 rounded-md border border-blue-100 font-bold">
+                            {item.products?.nama_produk} x{item.jumlah}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+
+                    {/* 3. TOTAL */}
+                    <td className="p-6 font-black text-orange-600 text-base">
+                      Rp {order.total_bayar?.toLocaleString()}
+                    </td>
+
+                    {/* 4. STATUS */}
+                    <td className="p-6 text-center">
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                        order.status_pesanan === 'antri' ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'
+                      }`}>
+                        {order.status_pesanan}
+                      </span>
+                    </td>
+
+                    {/* 5. AKSI */}
+                    <td className="p-6 text-right">
+                      <div className="flex justify-end gap-2">
+                        {order.status_pesanan === 'antri' && (
+                          <button 
+                            onClick={() => updateStatus(order.id, 'dimasak')} 
+                            className="bg-blue-600 text-white text-[10px] px-4 py-2 rounded-xl font-black shadow-lg shadow-blue-100 whitespace-nowrap"
+                          >
+                            👨‍🍳 TERIMA
+                          </button>
+                        )}
+                        {order.status_pesanan === 'selesai' && (
+                          <button 
+                            onClick={() => handlePrint(order)} 
+                            className="bg-gray-800 text-white text-[10px] px-4 py-2 rounded-xl font-black shadow-lg whitespace-nowrap"
+                          >
+                            🖨️ STRUK
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
         <div className="mb-8">
            <SettingsForm />

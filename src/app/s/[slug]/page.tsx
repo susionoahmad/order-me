@@ -208,7 +208,7 @@ export default function AhmadCodingApp() {
   )}
 
   {/* Scrollable Kategori */}
-  <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', overflowX: 'auto', padding: '15px 0 10px 0', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
+  <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', padding: '10px 20px 0', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
     <button onClick={() => setSelectedCat('Semua')} 
       style={{ padding: '8px 18px', borderRadius: '25px', fontSize: '11px', fontWeight: 'bold', border: '2px solid', flexShrink: 0, cursor: 'pointer', transition: '0.3s', backgroundColor: selectedCat === 'Semua' ? '#10b981' : '#f9fafb', color: selectedCat === 'Semua' ? 'white' : '#6b7280', borderColor: selectedCat === 'Semua' ? '#10b981' : '#f3f4f6' }}>
       SEMUA

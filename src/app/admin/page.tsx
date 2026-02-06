@@ -10,8 +10,14 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState<any[]>([])
   const [omzet, setOmzet] = useState(0)
   const [host, setHost] = useState('');
+  const [isClient, setIsClient] = useState(false);
 
-  const fetchData = async () => {
+ const fetchData = async () => {
+  // 1. Ambil jam 00:00:00 hari ini
+  const hariIni = new Date();
+  hariIni.setHours(0, 0, 0, 0);
+
+  // 2. Cukup satu panggil Supabase saja Pak, kita gabungkan semua fiturnya
   const { data, error } = await supabase
     .from('orders')
     .select(`
@@ -22,13 +28,19 @@ export default function AdminDashboard() {
         products (nama_produk)
       )
     `)
-    .order('created_at', { ascending: false });
+    .gte('created_at', hariIni.toISOString()) 
+    // TRIK SORTIR: 'antri' (A) & 'dimasak' (D) akan di atas 'selesai' (S) secara abjad
+    .order('status_pesanan', { ascending: true }) 
+    // Urutan waktu: Yang pesan duluan (lama) tetap di atas dalam grup statusnya
+    .order('created_at', { ascending: true });
 
   if (error) {
     console.error("Gagal ambil data:", error);
   } else if (data) {
+    // 3. Masukkan ke state untuk tabel
     setOrders(data);
     
+    // 4. Hitung Omzet hari ini (Hanya yang statusnya 'selesai')
     const total = data
       .filter(o => o.status_pesanan === 'selesai')
       .reduce((acc, curr) => acc + curr.total_bayar, 0);
@@ -52,54 +64,49 @@ const fetchProfile = async () => {
 }
 
   useEffect(() => {
-    const checkAccessAndSubscribe = async () => {
-    // --- 1. PROTEKSI LOGIN (SATPARAM) ---
+  let channel: any; // Kita siapkan variabel penampung di sini
+  setIsClient(true);
+
+  const initAdmin = async () => {
+    // 1. CEK LOGIN
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       router.push('/login');
       return;
     }
-    if (typeof window !== 'undefined') {
-    setHost(window.location.origin);
-  }
-  fetchData();
-  fetchProfile();
 
-  // AKTIFKAN REALTIME LISTENER
-  const channel = supabase
-    .channel('order-updates') // Beri nama bebas
-    .on(
-      'postgres_changes', 
-      { event: '*', schema: 'public', table: 'orders' }, 
-      (payload) => {
-        console.log('Ada perubahan data!', payload);
-        fetchData(); // Panggil ulang data setiap ada perubahan di tabel orders
-        
-        // Opsional: Bunyi notifikasi jika ada pesanan baru
-        if (payload.eventType === 'INSERT') {
-          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-          audio.play();
-        }
-      }
-    )
-    .subscribe();
+    if (typeof window !== 'undefined') setHost(window.location.origin);
+    
+    // 2. AMBIL DATA AWAL
+    fetchData();
+    fetchProfile();
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}
-  const channelPromise = checkAccessAndSubscribe();
-
-  // --- CLEANUP ---
-  return () => {
-        channelPromise.then((channel) => {
-          if (channel) {
-            // @ts-ignore
-            supabase.removeChannel(channel);
+    // 3. NYALAKAN RADAR (REALTIME)
+    channel = supabase
+      .channel('order-updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        (payload) => {
+          console.log('Jreng! Ada data masuk:', payload);
+          fetchData(); // Refresh data otomatis
+          
+          if (payload.eventType === 'INSERT') {
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+            audio.play().catch(e => console.log("Izin audio belum aktif"));
           }
-        });
-      };
-    }, [router]);// Tambahkan router di dependency agar sinkron
+        }
+      )
+      .subscribe();
+  };
+
+  initAdmin();
+
+  // --- CLEANUP JURUS PAMUNGKAS ---
+  return () => {
+    supabase.removeAllChannels(); // Langsung sapu bersih semua koneksi saat pindah halaman
+  };
+}, [router]);
 
   const updateStatus = async (id: string, statusBaru: string) => {
   console.log("Mencoba update ID:", id, "ke status:", statusBaru); // Cek di console browser (F12)
@@ -117,6 +124,25 @@ const fetchProfile = async () => {
     // Panggil kembali data terbaru agar tampilan berubah
     fetchData(); 
   }
+};
+
+const [filterDate, setFilterDate] = useState('');
+
+const fetchRekap = async () => {
+  if (!filterDate) return fetchData(); // Jika tanggal kosong, balik ke "Hari Ini"
+
+  // 1. Tentukan rentang waktu (Mulai jam 00:00 sampai 23:59 di tanggal tersebut)
+  const start = `${filterDate}T00:00:00.000Z`;
+  const end = `${filterDate}T23:59:59.999Z`;
+
+  const { data, error } = await supabase
+    .from('orders')
+    .select(`*, order_items (*, products (nama_produk))`)
+    .gte('created_at', start)
+    .lte('created_at', end)
+    .order('created_at', { ascending: false });
+
+  if (data) setOrders(data);
 };
 
 const handlePrint = (order: any) => {
@@ -280,16 +306,21 @@ const linkToko = `${host}/s/${profile?.slug}`;
             🔗 Bagikan Link Toko
           </h3>
 
-          {/* 1. QR CODE */}
-          <div className="flex justify-center mb-6">
-            <div className="p-3 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+          {/* 1. QR CODE - SEKARANG ANTI-ERROR */}
+        <div className="flex justify-center mb-6">
+          <div className="p-3 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+            {isClient && profile?.slug ? (
               <QRCodeSVG 
-                value={`${typeof window !== 'undefined' ? window.location.origin : ''}/s/${profile?.slug || ''}`}
+                value={`${window.location.origin}/s/${profile.slug}`}
                 size={140} 
               />
-            </div>
+            ) : (
+              <div className="w-[140px] h-[140px] flex items-center justify-center text-gray-400 text-[10px] font-black uppercase">
+                Memuat QR...
+              </div>
+            )}
           </div>
-
+        </div>
           {/* 2. INPUT LINK */}
           <div className="flex gap-2 mb-4">
             <input 
@@ -319,7 +350,18 @@ const linkToko = `${host}/s/${profile?.slug}`;
             <span>📲</span>
             <span style={{ fontSize: '14px' }}>BAGIKAN KE WHATSAPP</span>
           </button>
-        </div>       
+        </div>  
+        {/* Contoh Input Filter di Dashboard */}
+        <div className="flex gap-2 mb-4">
+          <input 
+            type="date" 
+            className="p-2 rounded-xl border border-gray-200 font-bold text-sm"
+           onChange={(e) => setFilterDate(e.target.value)}
+          />
+          <button onClick={fetchRekap} className="bg-orange-500 text-white px-4 rounded-xl text-xs font-black">
+            CEK REKAP
+          </button>
+        </div>     
         {/* ORDER LIST: VERSI STABIL & AMAN (TIDAK AKAN HANCUR) */}
         <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
           {/* Pembungkus ini yang bikin tabel bisa digeser di HP tapi tetap rapi di Laptop */}
@@ -353,8 +395,14 @@ const linkToko = `${host}/s/${profile?.slug}`;
                           </span>
                         ))}
                       </div>
+                      {/* --- CATATAN SEKARANG SUDAH DI DALAM TD (AMAN) --- */}
+                        {order.catatan_tambahan && (
+                          <div className="inline-block bg-orange-50 text-orange-700 text-[10px] p-2 rounded-lg border border-orange-100 italic font-bold mt-1">
+                            📝 Catatan: "{order.catatan_tambahan}"
+                          </div>
+                        )}
                     </td>
-
+                    
                     {/* 3. TOTAL */}
                     <td className="p-6 font-black text-orange-600 text-base">
                       Rp {order.total_bayar?.toLocaleString()}
@@ -369,9 +417,10 @@ const linkToko = `${host}/s/${profile?.slug}`;
                       </span>
                     </td>
 
-                    {/* 5. AKSI */}
+                    {/* 5. AKSI - SEKARANG SUDAH ADA RUMAHNYA (TD) */}
                     <td className="p-6 text-right">
                       <div className="flex justify-end gap-2">
+                        {/* 1. JIKA MASIH ANTRI */}
                         {order.status_pesanan === 'antri' && (
                           <button 
                             onClick={() => updateStatus(order.id, 'dimasak')} 
@@ -380,6 +429,29 @@ const linkToko = `${host}/s/${profile?.slug}`;
                             👨‍🍳 TERIMA
                           </button>
                         )}
+
+                        {/* 2. JIKA SEDANG DIMASAK */}
+                        {order.status_pesanan === 'dimasak' && (
+                          <button 
+                            onClick={() => updateStatus(order.id, 'selesai')} 
+                            style={{ 
+                              backgroundColor: '#059669',
+                              color: 'white', 
+                              fontSize: '10px', 
+                              padding: '8px 16px', 
+                              borderRadius: '12px', 
+                              fontWeight: '900', 
+                              border: 'none', 
+                              boxShadow: '0 4px 14px 0 rgba(5, 150, 105, 0.39)',
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            ✅ SELESAI
+                          </button>
+                        )}
+
+                        {/* 3. JIKA SUDAH SELESAI */}
                         {order.status_pesanan === 'selesai' && (
                           <button 
                             onClick={() => handlePrint(order)} 

@@ -15,7 +15,8 @@ export default function MenuPage() {
   harga_asli: '', // <--- WAJIB beri string kosong '' agar tidak error uncontrolled
   category_id: '',
   deskripsi: '',
-  image_url: ''
+  image_url: '',
+  is_best_seller: false // <--- Tambahkan ini di sini
 });
 // / 1. Update State Awal
 const [formData, setFormData] = useState({
@@ -24,7 +25,8 @@ const [formData, setFormData] = useState({
   harga: '',      // Ini harga jual ke pelanggan
   deskripsi: '',
   category_id: '',
-  image_url: ''
+  image_url: '',
+  is_best_seller: false
 });
  const [editingId, setEditingId] = useState<string | null>(null); // <--- INI YANG KURANG 
 
@@ -74,6 +76,7 @@ const [formData, setFormData] = useState({
     if (!user) throw new Error("Anda harus login terlebih dahulu!");
 
     // 2. Siapkan Payload
+    // 2. Siapkan Payload (DENGAN IS_BEST_SELLER)
     const payload = {
       nama_produk: form.nama_produk,
       harga: parseFloat(form.harga),
@@ -81,7 +84,8 @@ const [formData, setFormData] = useState({
       deskripsi: form.deskripsi,
       category_id: form.category_id,
       image_url: form.image_url,
-      profile_id: user.id // <--- WAJIB ADA agar tidak kena error RLS
+      profile_id: user.id,
+      is_best_seller: form.is_best_seller // <--- INI KUNCI YANG TADI KETINGGALAN!
     };
 
     if (editingId) {
@@ -104,8 +108,17 @@ const [formData, setFormData] = useState({
       alert("🚀 Menu baru berhasil ditambahkan!");
     }
 
+    
     // Reset Form & Refresh
-    setForm({ nama_produk: '', harga: '', harga_asli: '', deskripsi: '', category_id: '', image_url: '' });
+    setForm({ 
+      nama_produk: '', 
+      harga: '', 
+      harga_asli: '', 
+      deskripsi: '', 
+      category_id: '', 
+      image_url: '', 
+      is_best_seller: false // <--- Reset jadi false lagi
+    });
     setEditingId(null);
     fetchMenus();
 
@@ -149,7 +162,7 @@ const [formData, setFormData] = useState({
   }
 };
 // Fungsi Hapus
-const handleDelete = async (id: string) => {
+const hapusMenu = async (id: string) => {
   const confirmDelete = confirm("Menu ini tidak akan dihapus permanen, tapi akan disembunyikan dari pelanggan. Lanjutkan?");
   
   if (confirmDelete) {
@@ -169,7 +182,7 @@ const handleDelete = async (id: string) => {
 };
 
 // Fungsi Edit (Contoh sederhana: mengarahkan ke form edit)
-const handleEdit = (item: any) => {
+const editMenu = (item: any) => {
   // Gunakan setForm sesuai dengan nama state yang Bapak pakai di input
   setForm({
     nama_produk: item.nama_produk,
@@ -177,7 +190,8 @@ const handleEdit = (item: any) => {
     harga: item.harga.toString(),
     deskripsi: item.deskripsi || '',
     category_id: item.category_id || '',
-    image_url: item.image_url || ''
+    image_url: item.image_url || '',
+    is_best_seller: item.is_best_seller || false   
   });
   
   setEditingId(item.id);
@@ -198,27 +212,19 @@ const handleEdit = (item: any) => {
       
       {/* FORM INPUT */}
       <form onSubmit={simpanMenu} className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 mb-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <input 
-            placeholder="Nama Menu (Contoh: Nasi Box Ayam Bakar)" 
-            className="p-3 bg-gray-50 rounded-xl font-bold"
-            value={form.nama_produk}
-            onChange={(e) => setForm({...form, nama_produk: e.target.value})}
-            required
-          />
-          <input 
-            placeholder="Harga (Contoh: 25000)" 
-            type="number"
-            className="p-3 bg-gray-50 rounded-xl font-bold"
-            value={form.harga}
-            onChange={(e) => setForm({...form, harga: e.target.value})}
-            required
-          />
-          {/* DROPDOWN KATEGORI - Wajib ada agar logika Harga Asli jalan */}
-          <div className="md:col-span-2">
-            <label className="block text-[10px] font-black text-gray-400 mb-2 uppercase ml-2">Pilih Kategori Menu</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* 1. NAMA MENU */}
+            <input 
+              placeholder="Nama Menu (Contoh: Nasi Box Ayam Bakar)" 
+              className="p-3 bg-gray-50 rounded-xl font-bold"
+              value={form.nama_produk}
+              onChange={(e) => setForm({...form, nama_produk: e.target.value})}
+              required
+            />
+
+            {/* 2. KATEGORI MENU */}
             <select 
-              className="w-full p-3 bg-gray-50 rounded-xl font-bold outline-none border-2 border-transparent focus:border-orange-500"
+              className="p-3 bg-gray-50 rounded-xl font-bold outline-none"
               value={form.category_id}
               onChange={(e) => setForm({...form, category_id: e.target.value})}
               required
@@ -228,101 +234,155 @@ const handleEdit = (item: any) => {
                 <option key={cat.id} value={cat.id}>{cat.nama_kategori}</option>
               ))}
             </select>
+
+            {/* 3. HARGA JUAL */}
+            <div>
+              <label className="block text-[9px] font-black text-gray-400 mb-1 ml-2 uppercase">Harga Jual Sekarang (Rp)</label>
+              <input 
+                placeholder="Contoh: 15000" 
+                type="number"
+                className="w-full p-3 bg-gray-50 rounded-xl font-bold"
+                value={form.harga}
+                onChange={(e) => setForm({...form, harga: e.target.value})}
+                required
+              />
+            </div>
+
+            {/* 4. HARGA ASLI (LOGIKA BARU: OTOMATIS CORET JIKA BERBEDA) */}
+            <div>
+              <label className="block text-[9px] font-black text-gray-400 mb-1 ml-2 uppercase">Harga Coret / Asli (Rp)</label>
+              <input 
+                placeholder="Kosongkan jika tidak promo" 
+                type="number"
+                className="w-full p-3 bg-orange-50 rounded-xl font-bold text-orange-600 border-2 border-orange-100 focus:border-orange-300"
+                value={form.harga_asli}
+                onChange={(e) => setForm({...form, harga_asli: e.target.value})}
+              />
+              {/* Label Diskon Otomatis */}
+              {Number(form.harga_asli) > Number(form.harga) && (
+                <p className="text-[10px] text-green-600 ml-2 mt-1 font-black animate-pulse">
+                  🎉 HEMAT: {Math.round(((form.harga_asli - form.harga) / form.harga_asli) * 100)}%
+                </p>
+              )}
+            </div>
+
+            {/* 5. CHECKBOX BEST SELLER (FITUR BARU) */}
+            <div className="md:col-span-2 mt-2">
+              <label className="flex items-center gap-3 p-4 bg-amber-50 rounded-2xl border-2 border-amber-100 cursor-pointer hover:bg-amber-100 transition-all">
+                <input 
+                  type="checkbox"
+                  checked={form.is_best_seller}
+                  onChange={(e) => setForm({...form, is_best_seller: e.target.checked})}
+                  className="w-6 h-6 rounded-lg text-amber-500 border-amber-300 focus:ring-amber-500"
+                />
+                <div>
+                  <span className="block text-sm font-black text-amber-900">🔥 JADIKAN MENU BEST SELLER</span>
+                  <span className="block text-[10px] text-amber-600 font-bold">Muncul label spesial di HP Pelanggan</span>
+                </div>
+              </label>
+            </div>
+
+            <textarea 
+              placeholder="Deskripsi Singkat" 
+              className="p-3 bg-gray-50 rounded-xl font-bold md:col-span-2"
+              value={form.deskripsi}
+              onChange={(e) => setForm({...form, deskripsi: e.target.value})}
+            />
+
+            {/* FOTO MASAKAN */}
+            <div className="md:col-span-2 p-4 border-2 border-dashed border-gray-200 rounded-2xl">
+              <label className="block text-xs font-black text-gray-400 mb-2 uppercase">Foto Masakan</label>
+              <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={uploadFoto} 
+                  className="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700"
+                />
+                {form.image_url && (
+                  <div className="mt-4">
+                    <img src={form.image_url} className="h-32 w-32 object-cover rounded-2xl border-4 border-white shadow-md" />
+                  </div>
+                )}
+            </div>
           </div>
 
-          {/* Logika Harga Asli Bapak sudah benar, pastikan ditaruh tepat di bawah select ini */}
-          {/* 2. Input Harga Asli (HANYA MUNCUL UNTUK PROMO) */}
-            {/* Pastikan kita mencari objek kategori yang ID-nya cocok dengan yang dipilih di form */}
-            {categories.find(c => c.id === form.category_id)?.nama_kategori.toLowerCase() === 'promo' && (
-              <div className="md:col-span-2 mt-4 animate-bounce-subtle">
-                <input 
-                  type="number" 
-                  placeholder="Harga Asli Sebelum Diskon (Contoh: 20000)"
-                  className="w-full bg-orange-50 p-4 rounded-2xl border-2 border-orange-200 outline-none font-bold text-orange-600"
-                  value={form.harga_asli} // <--- Tambahkan value agar tersinkron dengan state
-                  onChange={(e) => setForm({...form, harga_asli: e.target.value})}
-                />
-                <p className="text-[10px] text-orange-400 ml-2 mt-1 font-bold">*Harga ini akan muncul dengan coretan (diskon)</p>
-              </div>
-            )}
-          <textarea 
-            placeholder="Deskripsi Singkat" 
-            className="p-3 bg-gray-50 rounded-xl font-bold md:col-span-2"
-            value={form.deskripsi}
-            onChange={(e) => setForm({...form, deskripsi: e.target.value})}
-          />
-          <div className="md:col-span-2 p-4 border-2 border-dashed border-gray-200 rounded-2xl">
-            <label className="block text-xs font-black text-gray-400 mb-2 uppercase">Foto Masakan</label>
-            <input 
-                type="file" 
-                accept="image/*" 
-                onChange={uploadFoto} 
-                className="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
-              />
-            {/* Preview Gambar jika sudah terupload */}
-              {form.image_url && (
-                <div className="mt-4 relative inline-block">
-                  <img src={form.image_url} className="h-32 w-32 object-cover rounded-2xl border-4 border-white shadow-md" />
-                  <div className="absolute -top-2 -right-2 bg-green-500 text-white rounded-full p-1 shadow-sm">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                </div>
-              )}
-          </div>
-        </div>
-        <button 
-            disabled={loading}
-            className={`mt-6 w-full px-8 py-3 rounded-xl font-black transition-all shadow-lg ${
-              editingId 
-                ? 'bg-blue-600 hover:bg-blue-700 text-white' // Warna biru kalau lagi EDIT
-                : 'bg-black hover:bg-gray-800 text-white'    // Warna hitam kalau TAMBAH BARU
-            }`}
-          >
-            {loading ? (
-              'Proses...'
-            ) : editingId ? (
-              '💾 SIMPAN PERUBAHAN MENU' 
-            ) : (
-              '➕ TAMBAHKAN MENU BARU'
-            )}
-          </button>
-      </form>
+          <button 
+              disabled={loading}
+              className={`mt-6 w-full px-8 py-4 rounded-2xl font-black transition-all shadow-xl ${
+                editingId 
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200' 
+                  : 'bg-black hover:bg-gray-800 text-white'
+              }`}
+            >
+              {loading ? 'Sabar Pak, Sedang Proses...' : editingId ? '💾 SIMPAN PERUBAHAN MENU' : '➕ TAMBAHKAN MENU BARU'}
+            </button>
+        </form>
 
       {/* DAFTAR MENU */}
-      {menus.map((item) => (
-  <div key={item.id} className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between">
-    <div>
-      {item.image_url ? (
-        <img src={item.image_url} className="w-full h-40 object-cover rounded-2xl mb-4" alt={item.nama_produk} />
-      ) : (
-        <div className="w-full h-40 bg-gray-50 rounded-2xl mb-4 flex items-center justify-center text-gray-400 text-[10px] font-bold">
-          📷 Belum ada foto
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  {menus.map((item) => (
+    <div key={item.id} className="bg-white border border-gray-100 rounded-2xl p-3 flex gap-4 shadow-sm relative overflow-hidden">
+      
+      {/* 1. LABEL BEST SELLER (PERBAIKAN WARNA TULISAN) */}
+      {item.is_best_seller && (
+        <div className="absolute top-0 left-0 bg-amber-500 shadow-md z-10 flex items-center gap-1 px-2 py-1 rounded-br-xl">
+          <span className="text-[9px]">🔥</span>
+          <span className="text-[9px] font-black text-black tracking-tighter">
+            BEST SELLER
+          </span>
         </div>
       )}
-      <h3 className="font-black text-sm uppercase text-gray-800">{item.nama_produk}</h3>
-      <p className="text-orange-500 font-black text-sm">Rp {item.harga.toLocaleString()}</p>
-      <p className="text-gray-400 text-[10px] mt-1 italic">{item.deskripsi}</p>
-    </div>
 
-    {/* TOMBOL AKSI: EDIT & HAPUS */}
-    <div className="flex gap-2 mt-4 pt-4 border-t border-gray-50">
-      <button 
-        onClick={() => handleEdit(item)}
-        className="flex-1 bg-gray-100 hover:bg-blue-100 text-blue-600 py-2 rounded-xl text-[10px] font-black transition-all"
-      >
-        ✏️ EDIT
-      </button>
-      <button 
-        onClick={() => handleDelete(item.id)}
-        className="flex-1 bg-gray-100 hover:bg-red-100 text-red-500 py-2 rounded-xl text-[10px] font-black transition-all"
-      >
-        🗑️ HAPUS
-      </button>
+      {/* 2. FOTO MENU (Dibuat lebih kecil & kotak) */}
+      <div className="w-24 h-24 flex-shrink-0">
+        <img 
+          src={item.image_url || 'https://via.placeholder.com/150'} 
+          className="w-full h-full object-cover rounded-xl"
+          alt={item.nama_produk}
+        />
+      </div>
+
+      {/* 3. INFO PRODUK */}
+      <div className="flex-1 flex flex-col justify-between">
+        <div>
+          <h3 className="text-sm font-black text-gray-800 uppercase leading-tight">{item.nama_produk}</h3>
+          
+          <div className="flex items-center gap-2 mt-1">
+            {/* Harga Sekarang */}
+            <span className="text-sm font-black text-orange-600">Rp {item.harga?.toLocaleString()}</span>
+            
+            {/* HARGA CORET & PERSENTASE (Otomatis muncul jika ada harga_asli) */}
+            {item.harga_asli > item.harga && (
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-gray-400 line-through">Rp {item.harga_asli.toLocaleString()}</span>
+                <span className="text-[9px] bg-green-100 text-green-600 px-1 rounded font-bold">
+                  -{Math.round(((item.harga_asli - item.harga) / item.harga_asli) * 100)}%
+                </span>
+              </div>
+            )}
+          </div>
+          <p className="text-[10px] text-gray-400 line-clamp-2 mt-1 leading-none">{item.deskripsi}</p>
+        </div>
+
+        {/* 4. TOMBOL AKSI (Dibuat minimalis) */}
+        <div className="flex gap-2 mt-2">
+          <button 
+            onClick={() => editMenu(item)}
+            className="flex-1 py-2 bg-blue-50 text-blue-600 text-[10px] font-black rounded-lg hover:bg-blue-600 hover:text-white transition-all"
+          >
+            📝 EDIT
+          </button>
+          <button 
+            onClick={() => hapusMenu(item.id)}
+            className="flex-1 py-2 bg-red-50 text-red-600 text-[10px] font-black rounded-lg hover:bg-red-600 hover:text-white transition-all"
+          >
+            🗑️ HAPUS
+          </button>
+        </div>
+      </div>
     </div>
-  </div>
-))}
+  ))}
+</div>
     </div>
   )
 }

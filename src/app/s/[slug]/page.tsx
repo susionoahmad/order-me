@@ -64,111 +64,103 @@ export default function AhmadCodingApp() {
   const total = cart.reduce((a, c) => a + (c.harga * c.qty), 0)
 
   const handleCheckout = async () => {
-    // 1. Kunci agar tidak klik dobel
-    if (loading) return;
-    if (!form.nama || !form.nomor_wa_pelanggan || cart.length === 0) {
+  if (loading) return;
+  if (!form.nama || !form.nomor_wa_pelanggan || cart.length === 0) {
     alert("Waduh, Nama, Nomor WA, atau Pesanan masih kosong Pak!");
     return;
   }
-    setLoading(true);
+  
+  setLoading(true);
 
-    try {
-      const totalBayar = cart.reduce((acc, item) => acc + (item.harga * item.qty), 0);
+  try {
+    const totalBayar = cart.reduce((acc, item) => acc + (item.harga * item.qty), 0);
+    const metodeDB = form.metode?.toLowerCase().includes('qris') ? 'qris' : 'tunai';
+    const hariIni = new Date().toISOString().split('T')[0];
 
-      // --- 2. JURUS ANTI-ERROR DATABASE ---
-      // Kita kirim teks murni huruf kecil agar lolos 'Check Constraint'
-      const metodeDB = form.metode?.toLowerCase().includes('qris') ? 'qris' : 'tunai';
-      // 1. Ambil tanggal hari ini (format: YYYY-MM-DD)
-      const hariIni = new Date().toISOString().split('T')[0];
+    // 1. Ambil Nomor Antrian
+    const { count } = await supabase
+      .from('orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('profile_id', toko.id)
+      .gte('created_at', hariIni);
 
-      // 2. Hitung jumlah pesanan yang masuk khusus hari ini
-      const { count } = await supabase
-        .from('orders')
-        .select('*', { count: 'exact', head: true })
-        .eq('profile_id', toko.id)
-        .gte('created_at', hariIni);
+    const nomorAntrianBaru = (count || 0) + 1;
 
-      // 3. Nomor antrian adalah jumlah hari ini + 1
-      const nomorAntrianBaru = (count || 0) + 1;
-      // --- 3. SIMPAN KE TABEL 'orders' ---
-      const { data: orderData, error: orderError } = await supabase
-        .from('orders')
-        .insert([{
-          profile_id: toko.id,
-          nama_pelanggan: form.nama,
-          nomor_wa_pelanggan: form.nomor_wa_pelanggan,
-          catatan_tambahan: form.catatan_tambahan,
-          total_bayar: totalBayar,
-          metode_bayar: metodeDB, 
-          alamat_maps_url: form.maps || '', 
-          status_pesanan: 'antri',
-          nomor_antrian: nomorAntrianBaru
-        }])
-        .select()
-        .single();
+    // 2. Simpan ke Tabel Orders
+    const { data: orderData, error: orderError } = await supabase
+      .from('orders')
+      .insert([{
+        profile_id: toko.id,
+        nama_pelanggan: form.nama,
+        nomor_wa_pelanggan: form.nomor_wa_pelanggan,
+        catatan_tambahan: form.catatan_tambahan,
+        total_bayar: totalBayar,
+        metode_bayar: metodeDB, 
+        alamat_maps_url: form.maps || '', 
+        status_pesanan: 'antri',
+        nomor_antrian: nomorAntrianBaru
+      }])
+      .select()
+      .single();
 
-      if (form.nomor_wa_pelanggan) {
-          localStorage.setItem('pembeli_wa', form.nomor_wa_pelanggan);
-        }
-      if (orderError) throw new Error(orderError.message);
+    if (orderError) throw new Error(orderError.message);
 
-      // --- 4. SIMPAN KE TABEL 'order_items' ---
-      const detailItems = cart.map(item => ({
-        order_id: orderData.id,
-        product_id: item.id,
-        jumlah: item.qty,
-        subtotal: item.harga * item.qty
-      }));
-      
-      const { error: itemsError } = await supabase.from('order_items').insert(detailItems);
-      if (itemsError) throw itemsError;
+    // 3. Simpan ke Tabel Order Items
+    const detailItems = cart.map(item => ({
+      order_id: orderData.id,
+      product_id: item.id,
+      jumlah: item.qty,
+      subtotal: item.harga * item.qty
+    }));
+    
+    const { error: itemsError } = await supabase.from('order_items').insert(detailItems);
+    if (itemsError) throw itemsError;
 
-      // --- FORMAT WHATSAPP (BERSIH & PROFESIONAL) ---
-      let nomorWA = toko?.nomor_wa_admin?.replace(/\D/g, "") || "";
-      if (nomorWA.startsWith("0")) nomorWA = "62" + nomorWA.slice(1);
+    // 4. Susun Pesan WhatsApp
+    let nomorWAAdmin = toko?.nomor_wa_admin?.replace(/\D/g, "") || "";
+    if (nomorWAAdmin.startsWith("0")) nomorWAAdmin = "62" + nomorWAAdmin.slice(1);
 
-      const teksCatatanWA = form.catatan_tambahan 
-        ? `\n📝 *Catatan:* _${form.catatan_tambahan}_` 
-        : '';
-      const listPesananWA = cart.map(i => `* ${i.nama_produk} (x${i.qty} - @${i.harga.toLocaleString()})`).join('\n');
-      const labelBayarWA = form.metode?.includes('QRIS') ? '📱 QRIS / TRANSFER' : '💵 TUNAI / COD';
+    const teksCatatanWA = form.catatan_tambahan ? `\n📝 *Catatan:* _${form.catatan_tambahan}_` : '';
+    const listPesananWA = cart.map(i => `* ${i.nama_produk} (x${i.qty})`).join('\n');
+    const labelBayarWA = form.metode?.includes('QRIS') ? '📱 QRIS / TRANSFER' : '💵 TUNAI / COD';
 
-      // Kita susun pesan murni dengan format yang Bapak minta
-      // Pakai \n untuk baris baru agar rapi
-      const pesanMurni = `*PESANAN BARU - #${orderData?.nomor_antrian || '1'}*\n\n` +
-                         `👤 *Nama:* ${form.nama}\n` +
-                         `💵 *Bayar:* ${labelBayarWA}\n` +
-                         `${form.maps ? `📍 *Lokasi:* ${form.maps}\n` : ''}` +
-                         `${teksCatatanWA}\n` +
-                         `\n*Detail Menu:*\n${listPesananWA}\n\n` +
-                         `💰 *TOTAL: Rp ${totalBayar.toLocaleString()}*`;
+    const pesanMurni = `*PESANAN BARU - #${orderData?.nomor_antrian || '1'}*\n\n` +
+                       `👤 *Nama:* ${form.nama}\n` +
+                       `💵 *Bayar:* ${labelBayarWA}\n` +
+                       `${form.maps ? `📍 *Lokasi:* ${form.maps}\n` : ''}` +
+                       `${teksCatatanWA}\n` +
+                       `\n*Detail Menu:*\n${listPesananWA}\n\n` +
+                       `💰 *TOTAL: Rp ${totalBayar.toLocaleString()}*`;
 
-      // Gunakan encodeURIComponent agar simbol # dan spasi tidak bikin teks hilang
-      const linkFinal = `https://api.whatsapp.com/send?phone=${nomorWA}&text=${encodeURIComponent(pesanMurni)}`;
+    const linkFinal = `https://api.whatsapp.com/send?phone=${nomorWAAdmin}&text=${encodeURIComponent(pesanMurni)}`;
 
-      // Buka di tab baru agar aplikasi tidak tertutup
-     
+    // 5. Simpan LocalStorage & Reset Form (Lakukan SEBELUM buka WA)
+    localStorage.setItem('pembeli_wa', form.nomor_wa_pelanggan);
+    setCart([]);
+    setShowCheckout(false);
+    setForm({
+      nama: '',
+      nomor_wa_pelanggan: '',
+      catatan_tambahan: '',
+      metode: 'Tunai',
+      maps: ''
+    });
 
-      // Reset
-      setCart([]);
-      setShowCheckout(false);
-      window.open(linkFinal, '_blank');
-      setForm({
-        nama: '',
-        nomor_wa_pelanggan: '',
-        catatan_tambahan: '',
-        metode: 'Tunai', // Reset ke pilihan awal
-        maps: ''
-      });
-      
-    } catch (err: any) {
-      console.error("Detail Error:", err);
-      alert("Gagal Proses: " + err.message);
-    } finally {
-      // Tombol aktif lagi setelah 2 detik
-      setLoading(false);
+    // 6. JURUS ANTI-BLOKIR POPUP
+    // Jika HP (iPhone/Android), gunakan location.href agar tidak diblokir browser
+    if (/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+        window.location.href = linkFinal;
+    } else {
+        window.open(linkFinal, '_blank');
     }
-  };
+    
+  } catch (err: any) {
+    console.error("Detail Error:", err);
+    alert("Gagal Proses: " + err.message);
+  } finally {
+    setLoading(false);
+  }
+};
   return (
     <div style={{ maxWidth: '448px', margin: '0 auto', backgroundColor: '#f9fafb', minHeight: '100vh', paddingBottom: '140px', fontFamily: 'sans-serif', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflowX: 'hidden' }}>
       
